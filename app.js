@@ -92,8 +92,8 @@ else {
 }
 })
 app.post('/register',(req,res)=>{
-User.register({username:req.body.username,
-    email:req.body.email},req.body.password,(err,user)=>{
+User.register({username:req.body.username.trim(),
+    email:req.body.email.trim()},req.body.password.trim(),(err,user)=>{
     if(err){res.redirect('/');}
     else{
         passport.authenticate('local')(req,res,()=>{
