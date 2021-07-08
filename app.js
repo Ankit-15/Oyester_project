@@ -3,45 +3,41 @@ const app=express();
 const mongoose=require('mongoose');
 const session=require('express-session');
 const passport=require('passport')
-const flash=require('connect-flash');
 const passportLocalMongoose=require('passport-local-mongoose');
+const connectEnsureLogin=require('connect-ensure-login');
+const flash=require('connect-flash')
+const methodOverride = require('method-override');
+app.use(methodOverride('_method'));
 
-// const User=require('./models/user')
+
 
 app.set('view engine','ejs');
-app.use(express.urlencoded({extended:true}));
-app.use(express.static('public'));
+app.use(express.urlencoded({extended:false}));
+app.use(express.static('public'))
 
 app.use(session({
     secret:"This is secret.",
     resave:false,
-    saveUninitialized:false,
-    cookie:{
-        httpOnly:true,
-           expires:Date.now()+1000*60*60*24*7,
-           maxAge:1000*60*60*24*7
-       }
+    saveUninitialized:true
 }));
-
 app.use(passport.initialize());
-app.use(passport.session());
+app.use(passport.session()); 
 app.use(flash())
-
 app.use((req,res,next)=>{
     res.locals.user=req.user;
-    res.locals.success=req.flash('success');
+   res.locals.success=req.flash('success');
     res.locals.error=req.flash('error');
     res.locals.request=req;
     next();
 })
-const dbUrl='mongodb://localhost:27017/wa';
-
+//const y=' || 'mongodb://localhost:27017/wa' ||;
+const dbUrl= 'mongodb+srv://DBpost:NwnXACiUnNotx5uA@cluster0.xynnz.mongodb.net/myFirstDatabase?retryWrites=true&w=majority' || 'mongodb://localhost:27017/wa';
 mongoose.connect(dbUrl, { useCreateIndex: true, useUnifiedTopology: true, useNewUrlParser: true, useFindAndModify: false },(err,client)=>{
     if(!err)console.log("Database Connected!")
 else console.log(err);
 })
 const userSchema=new mongoose.Schema({
-    username:{
+    username:{  
         type:String,
         unique:true,
         minlength:4
@@ -54,54 +50,82 @@ const userSchema=new mongoose.Schema({
     }
 
 })
-
 userSchema.plugin(passportLocalMongoose);
 const User=new mongoose.model('User',userSchema);
 passport.use(User.createStrategy());
 passport.serializeUser(User.serializeUser());
 passport.deserializeUser(User.deserializeUser());
-
+const postSchema=new mongoose.Schema({
+    title:{
+        type:String,
+        
+    },
+    body:{
+        type:String
+    },
+    author:{
+        type:mongoose.Schema.Types.ObjectId,
+        ref:'User'
+    }
+    
+})
+const Post=new mongoose.model('Post',postSchema);
 app.get('/',(req,res)=>{
-    if(!req.user)res.render('home',);
-else  res.render('loggedin');
+    if(req.isAuthenticated()) res.redirect('/userhome');
+else res.render('home')
 })
-app.get('/userhome',(req,res)=>{
+app.get('/userhome',connectEnsureLogin.ensureLoggedIn('/'),async (req,res)=>{
+    const y=await Post.find({}).populate('author');
+   
+res.render('loggedin',{user:req.user,y});
+
+})
+app.post('/login', passport.authenticate('local', { failureFlash:true,failureRedirect: '/' }),  function(req, res) {
+                req.flash('success',`Welcome ${req.user.username}`)
+	res.redirect('/userhome');
+
+})
+app.get('/:id/edit-post',async (req,res)=>{
     if(req.isAuthenticated()){
-        res.render('loggedin')
-    }else res.redirect('/');
-})
-app.post('/login',(req,res)=>{
-const user=new User({
-    username:req.body.username,
-password:req.body.password});
-if(user){
-req.login(user,(err)=>{
-    if(err){
-        console.log(err);
-        res.redirect('/');
+        const {id}=req.params;
+        const y=await Post.findById(id);
+        console.log(y);
+        res.render('edit',{y});
     }
     else {
-        passport.authenticate('local',{failureFlash:true,failureRedirect:'/'})(req,res,()=>{
-            req.flash('success',`Welcome Back ${req.user.username}`)
-            res.redirect('/userhome');
-    })
-}})}
-else {
-    req.flash('error',`You need to login first!! Please provide valid login credentials!`)
-    res.redirect('/') ;
-}
-})
-app.post('/register',(req,res)=>{
-User.register({username:req.body.username.trim(),
-    email:req.body.email.trim()},req.body.password.trim(),(err,user)=>{
-    if(err){res.redirect('/');}
-    else{
-        passport.authenticate('local')(req,res,()=>{
-            req.flash('success',`Welcome ${req.user.username}`)
-            res.redirect('/userhome');
-        })
+        req.flash('error','You must be logged in to create a post!')
+        res.redirect('/');
     }
 })
+app.put('/:id/update',async (req,res)=>{
+const y=req.params;
+console.log(y);
+const newp=await Post.findByIdAndUpdate(y.id,{title:req.body.title,body:req.body.body});
+await newp.save();
+ res.redirect('/userhome');
+
+
+})
+app.delete('/:id/delete',async (req,res)=>{
+    const y=req.params;
+    console.log(y);
+  await Post.findByIdAndDelete(y.id);
+     res.redirect('/userhome');
+    
+    
+    })
+app.post('/register',(req,res)=>{
+    User.register({username:req.body.username,
+        email:req.body.email},req.body.password,(err,user)=>{
+            
+            if(err){ req.flash('error','Invalid');res.redirect('/');}
+        else{
+            passport.authenticate('local',{ failureFlash:true})(req,res,()=>{
+                req.flash('success',`Welcome ${req.user.username}`)
+                res.redirect('/userhome');
+            })
+        }
+    })
 })
 app.post('/logout',(req,res)=>{
     if(req.isAuthenticated()){
@@ -117,18 +141,16 @@ app.get('/create-post',(req,res)=>{
         res.render('postform');
     }
     else {
-        req.flash('error',`You need to login first to create a post!!`)
-        res.redirect('/') ;
+        req.flash('error','You must be logged in to create a post!')
+        res.redirect('/');
     }
 })
-app.post('/create-post',(req,res)=>{
-    if(req.isAuthenticated()){
-        
-    }
-    else {
-        req.flash('error',`You need to login first to create a post!!`)
-        res.redirect('/') ;
-    }
+app.post('/create-post',async (req,res)=>{
+
+const y=new Post({title:req.body.title,body:req.body.body,author:req.user._id});
+await y.save();
+console.log(y);
+res.redirect('/userhome');
 })
 const port=3000;
 app.listen(3000,()=>{

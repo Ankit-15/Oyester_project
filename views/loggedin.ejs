@@ -5,8 +5,41 @@
 <%-include('flash')  %> 
 
     <div class="text-center">
-      <h2>Hello <strong><%= user.username %> </strong>, your feed is empty.</h2>
+      <h2>Hello <strong><%= user.username %> </strong>,
+        <% if(y.size==0){ %> 
+        your feed is empty.</h2>
       <p class="lead text-muted">Your feed displays the latest posts from the people you follow. If you don&rsquo;t have any friends to follow that&rsquo;s okay; you can use the &ldquo;Search&rdquo; feature in the top menu bar to find content written by people with similar interests and then follow them.</p>
+        
+      <% }else { %> 
+        <%  for(let i of y) {%>
+        <div class="card mt-3" >
+          
+          <div class="card-header left-align">
+            <%=i.title  %>
+          </div>
+          <div class="card-body">
+          <p class="card-text lead text-muted" ><%=i.body %> </p><h5 class=" align-right card-title">-by <%=i.author.username%></h5>
+              <% if(i.author._id.equals(user._id)){
+              
+ %>         
+           
+              <a  href="/<%=i._id%>/edit-post" class="btn btn-info mr-2">Edit</a>
+            
+ <form class="d-inline" action="/<%=i._id%>/delete?_method=DELETE" method="post">            <button   class="btn btn-danger">Delete</button>
+ </form><%}%>
+
+
+
+          </div>
+
+        </div>
+
+
+         
+         
+            <p class="lead text-muted">
+<br>
+<% }} %>     
     </div>  
   </div>
   
